@@ -1,5 +1,6 @@
 # Automated-Data-Flow-to-Snowflake-DB
 
+![Data Pipeline Diagram](./images/projectstructure.jpg)
 
 
 -Initially created a weather api and got the api key.
