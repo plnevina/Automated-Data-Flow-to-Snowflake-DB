@@ -1,1 +1,73 @@
+-- create database
+CREATE DATABASE weather_db;
+USE DATABASE weather_db;
+--create schema
+CREATE SCHEMA weather_schema;
+USE SCHEMA weather_schema;
 
+--create table
+CREATE OR REPLACE TABLE weather_table (
+    Location STRING,               -- Add a location column
+    DateTime STRING,            -- DateTime as TIMESTAMP type
+    Humidity FLOAT,             -- Temperature as FLOAT
+    Temperature FLOAT,                -- Humidity as FLOAT
+    WindSpeed FLOAT              -- WindSpeed as FLOAT
+    );
+
+--create storage integration
+CREATE OR REPLACE STORAGE INTEGRATION s3_integration
+    TYPE = EXTERNAL_STAGE
+    STORAGE_PROVIDER = 'S3'
+    STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::381492148313:role/nevina_ec2'
+    ENABLED = TRUE
+    STORAGE_ALLOWED_LOCATIONS = ('s3://dynamo-weather/')
+    COMMENT = 'Storage integration for accessing S3 bucket';
+
+DESC INTEGRATION s3_integration;
+
+--create stage
+CREATE OR REPLACE STAGE weather_stage
+    URL = 's3://dynamo-weather/'
+    STORAGE_INTEGRATION = s3_integration;
+
+--for json files
+CREATE OR REPLACE TABLE staging_weather_table (
+    raw VARIANT
+);
+
+--create json format
+CREATE OR REPLACE FILE FORMAT my_json_format
+    TYPE = 'JSON'
+    STRIP_OUTER_ARRAY = TRUE; 
+
+--create pipe
+CREATE OR REPLACE PIPE weather_pipe
+    AUTO_INGEST = TRUE
+    AS
+    COPY INTO staging_weather_table
+    FROM @weather_stage
+    FILE_FORMAT = (FORMAT_NAME = 'my_json_format')
+    ON_ERROR = 'CONTINUE';
+    
+-- automate task
+
+CREATE OR REPLACE TASK transform_and_load_task
+    WAREHOUSE = COMPUTE_WH
+    SCHEDULE = 'USING CRON * * * * * UTC'
+AS
+INSERT INTO weather_table
+SELECT
+    raw:Location::STRING AS Location,
+    raw:DateTime::STRING AS DateTime,
+    raw:Temperature::FLOAT AS Temperature,
+    raw:Humidity::FLOAT AS Humidity,
+    raw:WindSpeed::FLOAT AS WindSpeed
+FROM staging_weather_table;
+
+--resume task
+ALTER TASK transform_and_load_task RESUME;
+--suspend task
+ALTER TASK transform_and_load_task SUSPEND;
+
+-- Check the data in the table
+SELECT * FROM weather_table;
