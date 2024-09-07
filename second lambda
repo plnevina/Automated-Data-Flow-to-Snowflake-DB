@@ -1,0 +1,47 @@
+import json
+import boto3
+
+s3 = boto3.client('s3')
+
+def lambda_handler(event, context):
+    try:
+        # Check if the event has the expected structure
+        if 'Records' in event:
+            for record in event['Records']:
+                if record['eventName'] == 'INSERT':
+                    new_image = record['dynamodb']['NewImage']
+                    # Convert DynamoDB JSON format to normal JSON
+                    data = {k: list(v.values())[0] for k, v in new_image.items()}
+                   
+                    # Convert data to JSON string
+                    json_data = json.dumps(data)
+                   
+                    # Define S3 bucket and key
+                    bucket_name = 'demo-mybuckets'
+                    object_key = f"{data['PrimaryKey']}.json"
+                   
+                    # Upload to S3
+                    s3.put_object(Bucket=bucket_name, Key=object_key, Body=json_data)
+        else:
+            # If the 'Records' key is not present, check the top-level event structure
+            if 'eventName' in event and event['eventName'] == 'INSERT':
+                new_image = event['dynamodb']['NewImage']
+                # Convert DynamoDB JSON format to normal JSON
+                data = {k: list(v.values())[0] for k, v in new_image.items()}
+               
+                # Convert data to JSON string
+                json_data = json.dumps(data)
+               
+                # Define S3 bucket and key
+                bucket_name = 'demo-mybuckets'
+                object_key = f"{data['PrimaryKey']}.json"
+               
+                # Upload to S3
+                s3.put_object(Bucket=bucket_name, Key=object_key, Body=json_data)
+       
+        return {'statusCode': 200, 'body': json.dumps('Success')}
+   
+    except Exception as e:
+        # Handle any exceptions that may occur
+        print(f"Error processing event: {str(e)}")
+        return {'statusCode': 500, 'body': json.dumps('Error processing event')}
